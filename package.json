@@ -1,0 +1,17 @@
+{
+  "name": "sofascore-api",
+  "version": "1.0.0",
+  "description": "Render-hosted SofaScore proxy with TLS fingerprint rotation, caching and an image relay",
+  "main": "sofascore.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node sofascore.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "wreq-js": "^3.2.0"
+  }
+}

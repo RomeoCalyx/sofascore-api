@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Secrets — the relay refuses to start without API_KEY in production
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -21,7 +21,7 @@
 "use strict";
 
 const express = require("express");
-const { fetch } = require("wreq-js");
+const { fetch, createSession } = require("wreq-js");
 
 const PORT = Number(process.env.PORT) || 3000;
 const SS_BASE = "https://www.sofascore.com/api/v1";
@@ -85,24 +85,29 @@ async function upstream(path, kind) {
   const url = path.startsWith("http") ? path : base + path;
   const accept = kind === "img" ? "image/*,*/*" : HEADERS.Accept;
 
+  let lastStatus = 0;
+  let lastBody = "";
+
   // The search route sits behind SofaScore's challenge layer. A plain fetch is
   // refused, but a session that has already visited the site answers normally,
   // so those routes go through a warm cookie jar instead.
   if (kind !== "img" && path.startsWith("/search/")) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const s = await fetch.createSession({ browser: "okhttp_5", os: "android" });
+        const s = await createSession({ browser: "okhttp_5", os: "android" });
+        // Visiting the site first plants the challenge cookie the API expects.
         try { await s.fetch("https://www.sofascore.com/", { headers: { Accept: "text/html" } }); } catch {}
-        const res = await s.fetch(url, { headers: { ...HEADERS, Accept: "text/html,*/*;q=0.8" } });
+        const res = await s.fetch(url, { headers: { ...HEADERS } });
         const buf = Buffer.from(await res.arrayBuffer());
         if (res.ok && buf.length) return { status: 200, buffer: buf, type: null };
-      } catch {}
+        lastBody = buf.toString("utf8").slice(0, 120);
+      } catch (err) {
+        lastBody = err.message.slice(0, 120);
+      }
     }
+    console.error(`[proxy] search challenge not cleared: ${lastBody}`);
     return { status: 403, text: "search challenge not cleared" };
   }
-
-  let lastStatus = 0;
-  let lastBody = "";
 
   for (let attempt = 0; attempt < FINGERPRINTS.length; attempt++) {
     const fp = FINGERPRINTS[attempt];
@@ -174,7 +179,9 @@ app.get("/img/*", async (req, res) => {
 
 /** JSON relay — mirrors the SofaScore v1 surface exactly. */
 app.get("/api/*", async (req, res) => {
-  const path = "/" + req.params[0];
+  // Express drops the query string from `params`, and routes like /search/all
+  // are meaningless without it, so it is taken from the original URL.
+  const path = req.originalUrl.replace(/^\/api/, "").replace(/[?&]cache=\d+/, "").replace(/[?&]$/, "") || "/";
   const ttl = Number(req.query.cache ?? 0);
   const key = "api:" + req.originalUrl;
 
